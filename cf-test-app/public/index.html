@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+      integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+      crossorigin=""/>
+
+    <!-- Make sure you put this AFTER Leaflet's CSS -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+      integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+      crossorigin="">
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Web site created using create-react-app"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!--
+      Notice the use of %PUBLIC_URL% in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
+
+      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <script
+      type="text/javascript"
+      src="https://sandbox.web.squarecdn.com/v1/square.js"
+    ></script>
+    <script type="text/javascript">
+
+      const appId = 'sandbox-sq0idb-k99S6tipwBxIPgOfuAfyUw';
+      const locationId = '{LOCATION_ID}';
+
+      async function initializeCard(payments) {
+        const card = await payments.card();
+        await card.attach('#card-container');
+
+        return card;
+      }
+
+      async function createPayment(token) {
+        const body = JSON.stringify({
+          locationId,
+          sourceId: token,
+        });
+
+        const paymentResponse = await fetch('/payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body,
+        });
+
+        if (paymentResponse.ok) {
+          return paymentResponse.json();
+        }
+
+        const errorBody = await paymentResponse.text();
+        throw new Error(errorBody);
+      }
+
+      async function tokenize(paymentMethod) {
+        const tokenResult = await paymentMethod.tokenize();
+        if (tokenResult.status === 'OK') {
+          return tokenResult.token;
+        } else {
+          let errorMessage = `Tokenization failed with status: ${tokenResult.status}`;
+          if (tokenResult.errors) {
+            errorMessage += ` and errors: ${JSON.stringify(
+              tokenResult.errors
+            )}`;
+          }
+
+          throw new Error(errorMessage);
+        }
+      }
+
+      // status is either SUCCESS or FAILURE;
+      function displayPaymentResults(status) {
+        const statusContainer = document.getElementById(
+          'payment-status-container'
+        );
+        if (status === 'SUCCESS') {
+          statusContainer.classList.remove('is-failure');
+          statusContainer.classList.add('is-success');
+        } else {
+          statusContainer.classList.remove('is-success');
+          statusContainer.classList.add('is-failure');
+        }
+
+        statusContainer.style.visibility = 'visible';
+      }
+
+      document.addEventListener('DOMContentLoaded', async function () {
+        if (!window.Square) {
+          throw new Error('Square.js failed to load properly');
+        }
+
+        let payments;
+        try {
+          payments = window.Square.payments(appId, locationId);
+        } catch {
+          const statusContainer = document.getElementById(
+            'payment-status-container'
+          );
+          statusContainer.className = 'missing-credentials';
+          statusContainer.style.visibility = 'visible';
+          return;
+        }
+
+        let card;
+        try {
+          card = await initializeCard(payments);
+        } catch (e) {
+          console.error('Initializing Card failed', e);
+          return;
+        }
+
+        // Checkpoint 2.
+        async function handlePaymentMethodSubmission(event, paymentMethod) {
+          event.preventDefault();
+
+          try {
+            // disable the submit button as we await tokenization and make a payment request.
+            cardButton.disabled = true;
+            const token = await tokenize(paymentMethod);
+            const paymentResults = await createPayment(token);
+            displayPaymentResults('SUCCESS');
+
+            console.debug('Payment Success', paymentResults);
+          } catch (e) {
+            cardButton.disabled = false;
+            displayPaymentResults('FAILURE');
+            console.error(e.message);
+          }
+        }
+
+        const cardButton = document.getElementById('card-button');
+        cardButton.addEventListener('click', async function (event) {
+          await handlePaymentMethodSubmission(event, card);
+        });
+      });
+    </script>
+    <title>React Square Test Payment App</title>
+  </head>
+  <body>
+    <div id="mapid"></div>
+    <form id="payment-form">
+      <div id="card-container"></div>
+      <button id="card-button" type="button">Pay $1.00</button>
+    </form>
+    <div id="payment-status-container"></div>
+
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+    <div id="root"></div>
+  </body>
+  <script type="text/javascript">
+	  var mymap = L.map('mapid').setView([45.4956684552418,-122.649521827698], 13).fitBounds([[45.48965204000928,-122.63664722442628],[45.50168487047437,-122.66239643096925]]);
+//          var bounds = L.latLngBounds([[-122.63664722442628,45.48965204000928],[-122.66239643096925,45.50168487047437]]);
+	  //var mymap = L.map('mapid').fitBounds([[-122.63664722442628,45.48965204000928],[-122.66239643096925,45.50168487047437]]);
+          L.tileLayer('https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=8dce3b053f6146fd8f2f6c0e12b7ff2e', {
+    		attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.thunderforest.com/">Thunderforest</a>',
+    		maxZoom: 18,
+		zoomOffset: -1,
+    		tileSize: 512
+	  }).addTo(mymap);
+  </script>
+</html>
